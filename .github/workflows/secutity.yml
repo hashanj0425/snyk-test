@@ -21,7 +21,7 @@ jobs:
       - name: Run Snyk tests
         uses: snyk/actions@v1
         with:
-          args: test
+          args: .
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
