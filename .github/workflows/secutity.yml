@@ -8,27 +8,68 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Run Snyk tests
-        uses: snyk/actions@v1
-        with:
-          args: .
+      # ---------------------------
+      # Snyk Test for Node.js app
+      # ---------------------------
+      - name: Run Snyk test for Node.js project
+        uses: snyk/actions/node@master
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --json-file-output=snyk-node-report.json
 
+      # ---------------------------
+      # Build Docker image
+      # ---------------------------
       - name: Build Docker image
         run: docker build -t my-nestjs-app .
 
+      # ---------------------------
+      # Snyk Test for Docker image
+      # ---------------------------
       - name: Test Docker image with Snyk
-        run: snyk container test my-nestjs-app
+        uses: snyk/actions/docker@master
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: my-nestjs-app
+          args: --json-file-output=snyk-docker-report.json
+
+      # ---------------------------
+      # Install HTML Reporter
+      # ---------------------------
+      - name: Install Snyk HTML Reporter
+        run: npm install -g snyk-to-html
+
+      # ---------------------------
+      # Convert JSON reports to HTML
+      # ---------------------------
+      - name: Generate HTML report
+        run: |
+          snyk-to-html -i snyk-node-report.json -o snyk-node-report.html
+          snyk-to-html -i snyk-docker-report.json -o snyk-docker-report.html
+
+      # ---------------------------
+      # Upload Snyk Reports (JSON + HTML)
+      # ---------------------------
+      - name: Upload Snyk scan reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-scan-reports
+          path: |
+            snyk-node-report.json
+            snyk-node-report.html
+            snyk-docker-report.json
+            snyk-docker-report.html
